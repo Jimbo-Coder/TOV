@@ -1,6 +1,7 @@
 import numpy as np
 import scipy as sci
 import matplotlib.pyplot as plt
+import csv
 
 
 G = 1; c = 1; 
@@ -25,7 +26,6 @@ def gradm(rhot, r):
 def edensity(rho, P):
    h = rho + P / (gamma-1)
    return(h)
-
 
 def gradm0(rho, m, r):
    h = 4*np.pi*(r**2)*rho*((1- (2*m)/r)**(-1/2))
@@ -105,7 +105,7 @@ def createstar(x, meth):
 rf = np.arange(rc, rmax, dr, dtype = np.float64)
 
 
-rho0test = np.arange(0, .8, 0.01); Pctest = Pres(rho0test);
+rho0test = np.arange(0, 1.5, 0.01); Pctest = Pres(rho0test);
 
 rhottest = edensity(rho0test, Pctest);
 
@@ -117,7 +117,7 @@ for j in rho0test:
 
 
 rhotvis = 1.47E15; rhotvis = rhotvis * (6.67E-11)*((3e8)**(-2)) * (100**(3));
-rhotvis =0.42;
+rhotvis =0.01;
 masst,masst0, mft, Pft,k = createstar(rhotvis, "Euler")
 
 
@@ -134,20 +134,72 @@ ratio = masst/rnf;
 peaki = np.argmax(mn)
 
 print(f"Turning point found at rhoct = {rhotn[peaki]}, M = {mn[peaki]}, M_0 = {mn0[peaki]}")
-print(f"For rho_c={rhotvis}, compactness is {ratio} ")
+print(f"For rho_c={rhotvis}, Radius is {rn[k]}, M_t  = {masst}, M_0 = {masst0},compactness is {ratio} ")
+
+counter = 1;
+reader = csv.reader(open("tov.dat_orig"))
+pa = []; ma = []; mb = []; mc = []; p0 = []
+for row in reader:
+   if counter <=7:
+      counter +=1
+      continue
+   else:
+      b = row[0].split()
+      a = b[0], b[2],b[3],b[4],b[6]
+      pa = np.append(pa, a[0])
+      ma = np.append(ma, a[1])
+      mb = np.append(mb, a[2])
+      mc = np.append(mc, a[3])
+      p0 = np.append(p0, a[4])
+
+   counter +=1
+
+ma = np.array(ma, dtype = np.float64);
+mb = np.array(mb, dtype = np.float64);
+mc = np.array(mc, dtype = np.float64);
+pa = np.array(pa, dtype = np.float64);
+p0 = np.array(p0, dtype = np.float64);
 
 plt.figure()
 plt.title("TOV M_Stars vs rho_c")
 plt.ylabel("M_Star")
 plt.xlabel("rhoc")
-plt.axvline(x=rhotvis, c='k')
-plt.plot(rhotn, mn)   
-plt.plot(rhotn,mn0, linestyle="--")
+#plt.axvline(x=rhotvis, c='k')
+plt.plot(rhotn, mn, label = "mM_t")   
+plt.plot(rhotn,mn0, linestyle="--", label = "mM_0")
+
+plt.scatter(pa, ma,label = "M_ADM", s = 0.65,c='k'); 
+plt.scatter(pa, mb, label = "M_prop", s = 0.65,c='m'); 
+plt.scatter(pa, mc, label = "M_0", s = 0.65,c='y');
+
+plt.legend()
 plt.savefig("TOV M_Stars vs rho_c.pdf",dpi=300)
 
 
+resmass = []; resmass0 = [];
+for j in p0:
+   mass, mass0,mfi,Pfi,gf = createstar(j, "Euler"); 
+   resmass = np.append(resmass, mass)
+   resmass0 = np.append(resmass0,mass0)
+
 #sols = sol.sol(rs)
 #rhos = sols[0]; ms = sols[1]
+
+plt.figure()
+plt.title("ADM/Total Mass Residual")
+plt.plot(pa, ((resmass - ma)/ma))
+plt.ylabel("deltaM")
+plt.xlabel("Central Total Energy Density")
+plt.savefig("ADM_MT resid.pdf",dpi=300)
+
+plt.figure()
+plt.title("Rest Mass resid")
+plt.plot(pa, ((resmass0 - mc)/mc))
+plt.ylabel("deltaM")
+plt.xlabel("Central Total Energy Density")
+plt.savefig("Rest Mass Resid.pdf",dpi=300)
+
+
 
 
 
