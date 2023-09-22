@@ -4,16 +4,33 @@ import matplotlib.pyplot as plt
 import csv
 
 
-G = 1; c = 1; 
+G = 6.67e-11; # 6.67E-11 m^3 / kg*s^2 = 1
+c = 3e8; # 3e8 m = 1 second
+Msun = 2e30; #2E30 Kg = 1, call this Msun
+lsc = G*Msun / (c**2) # so GMsun/c^2 = 1,482.222 m = 1, call this lsc
+tsc = G*Msun / (c**3) # then GMsun/c^3 = 4.94e-6 s = 1, call this tsc
+#energy is M*L^2/T^2 , mult by tsc^2 / (lsc^2 Msun) and its pure number
+psc = lsc*(tsc**2)/Msun #Pressure = energydensity, multi by  lsc*tsc^2 / (Msun) and its pure, factor psc
+dsc = (lsc**3)/Msun #For normal mass density
+#Scalings are Msun, lsc, tsc, psc
+# G = C = M_Sun  = 1 UNITS
 
 gamma = 2 
 K = 1
 
-n = 1/(gamma-1)
+n = 1/(gamma-1);  # == 1
+
+
+
+
 
 def Pres(b):
    g = K* (b**gamma)
    return(g)
+
+
+
+
 
 def density(z):
    g = (z/K)**(1/gamma)
@@ -23,34 +40,36 @@ def gradm(rhot, r):
    g = 4*np.pi*(r**2)*rhot
    return(g)
 
-def edensity(rho, P):
-   h = rho + P / (gamma-1)
-   return(h)
-
 def gradm0(rho, m, r):
    h = 4*np.pi*(r**2)*rho*((1- (2*m)/r)**(-1/2))
    return(h)
-
 
 def gradp(rho,rhot, m, r):
    h = ((-rhot*m)/(r**2)) * (1 + Pres(rho)/rhot) * (1 + (4 * np.pi * Pres(rho)*(r**3))/m)
    f = h * ((( 1 - ((2* m) / r)))**(-1))
    return(f)
 
+
+
 def schwarz(M, R):
    g = 0.5* np.log(1 - ((2*M)/R))
    return(g)
 
-dr = 0.0001; rc = 0.0001; rmax = 5;
+def edensity(rho, P):
+   h = rho + P / (gamma-1)
+   return(h)
 
+
+
+dr = 0.0001; rc = 0.000001; rmax = 300;
 
 def createstar(x, meth):
 
    rhoc = x; Pc = Pres(rhoc);  
    rhoct = edensity(rhoc,Pc)
 
-   mc = rhoct*4*np.pi*(rc**2)
-   mc0 = rhoc*4*np.pi*(rc**2)
+   mc = (4/3)*np.pi*(rc**3)*rhoc
+   mc0 = (4/3)*np.pi*(rc**3)*rhoc
 
    rf = np.arange(rc, rmax, dr, dtype = np.float64)
 
@@ -77,7 +96,7 @@ def createstar(x, meth):
 
          if Pf[i+1] <= 0:
             break
-
+      
          rhof[i+1] = density(Pf[i+1])
          rhoft[i+1] = edensity(rhof[i+1],Pf[i+1])
 
@@ -116,25 +135,21 @@ for j in rho0test:
    resultmass0 = np.append(resultmass0,mass0)
 
 
-rhotvis = 1.47E15; rhotvis = rhotvis * (6.67E-11)*((3e8)**(-2)) * (100**(3));
-rhotvis =0.01;
+rhotvis = 1.47E15; rhotvis = rhotvis*dsc *(1/1000)*(100**3);
 masst,masst0, mft, Pft,k = createstar(rhotvis, "Euler")
 
 
-rn = (K**(-n/2))*rf;
-rho0n = (K**(n))*rho0test;
-rhotn = (K**(n))*rhottest;
-mn = (K**(-n/2))*resultmass; masstn = (K**(-n/2))*masst; mftn = (K**(-n/2))*mft;
-mn0 = (K**(-n/2))*resultmass0; masstn0 = (K**(-n/2))*masst;
-rnf = rn[k];
+
+
+rnf = rf[k];
 
 ratio = masst/rnf;
 
 
-peaki = np.argmax(mn)
+peaki = np.argmax(resultmass)
 
-print(f"Turning point found at rhoct = {rhotn[peaki]}, M = {mn[peaki]}, M_0 = {mn0[peaki]}")
-print(f"For rho_c={rhotvis}, Radius is {rn[k]}, M_t  = {masst}, M_0 = {masst0},compactness is {ratio} ")
+print(f"Turning point found at rhoct = {rhottest[peaki]}, M = {resultmass[peaki]}, M_0 = {resultmass0[peaki]}")
+print(f"For rho_c={rhotvis}, Radius is {rf[k]}, M_t  = {masst}, M_0 = {masst0},compactness is {ratio} ")
 
 counter = 1;
 reader = csv.reader(open("tov.dat_orig"))
@@ -160,13 +175,14 @@ mc = np.array(mc, dtype = np.float64);
 pa = np.array(pa, dtype = np.float64);
 p0 = np.array(p0, dtype = np.float64);
 
+
 plt.figure()
 plt.title("TOV M_Stars vs rho_c")
 plt.ylabel("M_Star")
 plt.xlabel("rhoc")
-#plt.axvline(x=rhotvis, c='k')
-plt.plot(rhotn, mn, label = "mM_t")   
-plt.plot(rhotn,mn0, linestyle="--", label = "mM_0")
+plt.axvline(x=rhotvis, c='b')
+plt.plot(rhottest, resultmass, label = "mM_t")   
+plt.plot(rhottest,resultmass0, linestyle="--", label = "mM_0")
 
 plt.scatter(pa, ma,label = "M_ADM", s = 0.65,c='k'); 
 plt.scatter(pa, mb, label = "M_prop", s = 0.65,c='m'); 
@@ -176,28 +192,32 @@ plt.legend()
 plt.savefig("TOV M_Stars vs rho_c.pdf",dpi=300)
 
 
-resmass = []; resmass0 = [];
-for j in p0:
-   mass, mass0,mfi,Pfi,gf = createstar(j, "Euler"); 
-   resmass = np.append(resmass, mass)
-   resmass0 = np.append(resmass0,mass0)
+# RESIDUAL PLOTTING BLOCK, Uncomment if want comparisons
 
-#sols = sol.sol(rs)
-#rhos = sols[0]; ms = sols[1]
+# resmass = []; resmass0 = [];
+# for j in p0:
+#    mass, mass0,mfi,Pfi,gf = createstar(j, "Euler"); 
+#    resmass = np.append(resmass, mass)
+#    resmass0 = np.append(resmass0,mass0)
 
-plt.figure()
-plt.title("ADM/Total Mass Residual")
-plt.plot(pa, ((resmass - ma)/ma))
-plt.ylabel("deltaM")
-plt.xlabel("Central Total Energy Density")
-plt.savefig("ADM_MT resid.pdf",dpi=300)
 
-plt.figure()
-plt.title("Rest Mass resid")
-plt.plot(pa, ((resmass0 - mc)/mc))
-plt.ylabel("deltaM")
-plt.xlabel("Central Total Energy Density")
-plt.savefig("Rest Mass Resid.pdf",dpi=300)
+
+# plt.figure()
+# plt.title("ADM/Total Mass Residual")
+# plt.plot(pa, ((resmass - ma)/ma))
+# plt.ylabel("deltaM")
+# plt.xlabel("Central Total Energy Density")
+# plt.savefig("ADM_MT resid.pdf",dpi=300)
+
+# plt.figure()
+# plt.title("Rest Mass resid")
+# plt.plot(pa, ((resmass0 - mc)/mc))
+# plt.ylabel("deltaM")
+# plt.xlabel("Central Total Energy Density")
+# plt.savefig("Rest Mass Resid.pdf",dpi=300)
+
+
+##END RESIDUAL BLOCK
 
 
 
@@ -215,13 +235,13 @@ plt.figure()
 plt.title("TOV m vs r")
 plt.ylabel("Mass")
 plt.xlabel("Radius")
-plt.plot(rn[0:k], mftn[0:k])
+plt.plot(rf[0:k], mft[0:k])
 plt.savefig("TOV m vs r.pdf",dpi=300)
 
 plt.figure()
 plt.title("TOV P vs r")
 plt.ylabel("Pressure")
 plt.xlabel("Radius") 
-plt.plot(rn[0:k], Pft[0:k])
+plt.plot(rf[0:k], Pft[0:k])
 #plt.show()
 plt.savefig("TOV P vs r.pdf",dpi=300)
