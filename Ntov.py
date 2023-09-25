@@ -16,16 +16,91 @@ dsc = (lsc**3)/Msun #For normal mass density
 # G = C = M_Sun  = 1 UNITS
 
 gamma = 2 
-K = 1
+K = 10
 
 n = 1/(gamma-1);  # == 1
 
 
+# Reading and creating 4 Layer Polytrope block. 
+#  
+def fourlayer():
+   reader = csv.reader(open("peos_parameter.dat_SLy"))
+   polyN = 4
+   rhob =[]; gammas = []; presbs = [];counter = 1;
+   for row in reader:
+      if counter == 8:
+         break
+      a = row[0]
+      a = a.split()
+      if counter == 1:
+         counter +=1
+      elif counter ==2:
+         rhozero = np.array(a[0], dtype = np.float64)
+         preszero = np.array(a[1], dtype = np.float64)
+         counter+=1
+      elif counter>=2:
+         rhob = np.append(rhob, a[0])
+         gammas = np.append(gammas,a[1])
+         counter+=1
+      
+
+   rhob = np.array(rhob, dtype = np.float64);
+   gammas = np.array(gammas, dtype = np.float64);
+
+   #rhob = np.flip(rhob); gammas = np.flip(gammas);
+
+   rhob = rhob * dsc *(100**3)/(1000); 
+   rhozero = rhozero * dsc*(100**3)/(1000); preszero = preszero * psc;
+
+   gammas = gammas[0:polyN];
+
+   posi = np.digitize(rhozero, rhob)
+
+   kappas = np.zeros(polyN);
+   kappas[posi-1] = (preszero)/(rhozero**(gammas[posi-1]))
+
+   for i in range(polyN):
+      try:
+         kappas[posi +i] = kappas[posi + i - 1] * (rhob[posi+i]**(gammas[posi+i-1]-gammas[posi+i]))
+      except:
+         break
+
+   for i in range(polyN):
+      if posi-2-i >=0:
+         try:
+               kappas[posi -2 - i] = kappas[posi -1-i] * (rhob[posi-1-i]**(gammas[posi-1-i]-gammas[posi-2-i]))
+         except:
+               break
+      else:
+         break
+
+      
+   for j in range(polyN-1):
+      d = kappas[j]*(rhob[j+1]**[gammas[j]]) - kappas[j+1]*(rhob[j+1]**[gammas[j+1]])
+
+   resP = kappas * rhob[0:polyN]**gammas;
+   print(d/resP[1:polyN])
+
+   return(kappas, gammas, rhob)
+
+kappas, gammas, rhob = fourlayer()
+# End Read Polytrope Block
 
 
 
+# Currently rhob = [1.62820830e+00, 1.62820830e-03, 8.16036834e-04, 2.38076618e-04, 1.62820830e-18]
+# 1.62820830 limit
 def Pres(b):
+   #Basic 1 Layer polytrope
    g = K* (b**gamma)
+
+   #4 Layer polytrope digitize the rest mass density to the bins rhob
+
+   # ilayer = np.digitize(b,rhob)
+
+   # ilayer = np.clip(ilayer, 1,4)
+   # g = kappas[ilayer-1] * (b **(gammas[ilayer-1]))
+   
    return(g)
 
 
@@ -61,7 +136,7 @@ def edensity(rho, P):
 
 
 
-dr = 0.0001; rc = 0.000001; rmax = 300;
+dr = 0.0001; rc = 0.000001; rmax = 3;
 
 def createstar(x, meth):
 
@@ -124,7 +199,7 @@ def createstar(x, meth):
 rf = np.arange(rc, rmax, dr, dtype = np.float64)
 
 
-rho0test = np.arange(0, 1.79128785, 0.01); Pctest = Pres(rho0test);
+rho0test = np.arange(0, 1.628, 0.01); Pctest = Pres(rho0test);
 
 rhottest = edensity(rho0test, Pctest);
 
@@ -135,7 +210,7 @@ for j in rho0test:
    resultmass0 = np.append(resultmass0,mass0)
 
 
-rhotvis = 1.47E15; rhotvis = rhotvis*dsc *(1/1000)*(100**3);
+rhotvis = 1.47E15; rhotvis = rhotvis*dsc *(1/1000)*(100**3);# 0.0023934662036213987
 masst,masst0, mft, Pft,k = createstar(rhotvis, "Euler")
 
 
@@ -243,5 +318,4 @@ plt.title("TOV P vs r")
 plt.ylabel("Pressure")
 plt.xlabel("Radius") 
 plt.plot(rf[0:k], Pft[0:k])
-#plt.show()
 plt.savefig("TOV P vs r.pdf",dpi=300)

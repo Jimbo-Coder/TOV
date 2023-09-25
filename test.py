@@ -17,7 +17,7 @@ dsc = (lsc**3)/Msun #For normal mass density
 
 reader = csv.reader(open("peos_parameter.dat_SLy"))
 polyN = 4
-rhob =[]; gammas = []; presbs = [];counter = 1
+rhob =[]; gammas = []; presbs = [];counter = 1;
 for row in reader:
     if counter == 8:
         break
@@ -38,29 +38,39 @@ for row in reader:
 rhob = np.array(rhob, dtype = np.float64);
 gammas = np.array(gammas, dtype = np.float64);
 
-rhob = np.flip(rhob); gammas = np.flip(gammas);
+#rhob = np.flip(rhob); gammas = np.flip(gammas);
 
-rhob = rhob * dsc; rhozero = rhozero * dsc; preszero = preszero * psc;
+rhob = rhob * dsc *(100**3)/(1000); 
+rhozero = rhozero * dsc*(100**3)/(1000); preszero = preszero * psc;
 
-rhob = rhob[1:5]; gammas = gammas[1:5]
+gammas = gammas[0:polyN];
 
 posi = np.digitize(rhozero, rhob)
 
-kappas = np.zeros(4);
+kappas = np.zeros(polyN);
+kappas[posi-1] = (preszero)/(rhozero**(gammas[posi-1]))
 
-for i in range(int(polyN/2)):
-    if i==0:
-        kappas[posi + i] = (preszero)/rhozero*(gammas[posi + i])
-        kappas[posi -1-i] = (preszero)/rhozero*(gammas[posi -1 -i])
+for i in range(polyN):
+    try:
+        kappas[posi +i] = kappas[posi + i - 1] * (rhob[posi+i]**(gammas[posi+i-1]-gammas[posi+i]))
+    except:
+        break
+
+for i in range(polyN):
+    if posi-2-i >=0:
+        try:
+            kappas[posi -2 - i] = kappas[posi -1-i] * (rhob[posi-1-i]**(gammas[posi-1-i]-gammas[posi-2-i]))
+        except:
+            break
     else:
-        kappas[posi + i] = kappas[posi + i - 1] * (rhob[posi + i - 1]**(gammas[posi + i - 1]-gammas[posi + i]))
-        kappas[posi -1-i] = kappas[posi -i] * (rhob[posi -i]**(gammas[posi -i]-gammas[posi - i-1]))
+        break
 
     
-for j in range(3):
+for j in range(polyN-1):
     d = kappas[j]*(rhob[j+1]**[gammas[j]]) - kappas[j+1]*(rhob[j+1]**[gammas[j+1]])
-    print(d)
 
-g = kappas * (rhob**gammas)
-plt.figure()
-plt.plot(g)
+resP = kappas * rhob[0:polyN]**gammas;
+print(d/resP[1:polyN])
+# g = kappas * (rhob**gammas)
+# plt.figure()
+# plt.scatter([1,2,3,4,5],g)
