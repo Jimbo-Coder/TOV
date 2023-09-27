@@ -16,7 +16,7 @@ dsc = (lsc**3)/Msun #For normal mass density
 # G = C = M_Sun  = 1 UNITS
 
 gamma = 2 
-K = 10
+K = 1
 
 n = 1/(gamma-1);  # == 1
 
@@ -92,14 +92,14 @@ kappas, gammas, rhob = fourlayer()
 # 1.62820830 limit
 def Pres(b):
    #Basic 1 Layer polytrope
-   g = K* (b**gamma)
+   #g = K* (b**gamma)
 
-   #4 Layer polytrope digitize the rest mass density to the bins rhob
+   # 4 Layer polytrope digitize the rest mass density to the bins rhob
 
-   # ilayer = np.digitize(b,rhob)
+   ilayer = np.digitize(b,rhob)
 
-   # ilayer = np.clip(ilayer, 1,4)
-   # g = kappas[ilayer-1] * (b **(gammas[ilayer-1]))
+   ilayer = np.clip(ilayer, 1,4)
+   g = kappas[ilayer-1] * (b **(gammas[ilayer-1]))
    
    return(g)
 
@@ -136,7 +136,7 @@ def edensity(rho, P):
 
 
 
-dr = 0.0001; rc = 0.000001; rmax = 3;
+dr = 0.0001; rc = 0.000000001; rmax = 100;
 
 def createstar(x, meth):
 
@@ -161,6 +161,7 @@ def createstar(x, meth):
          mres = 0; phif0 = 0; 
          break
       if meth == "Euler":
+
          dm = gradm(rhoft[i],rf[i])
          dm0 = gradm0(rhof[i],mf[i],rf[i])
          dP = gradp(rhof[i],rhoft[i],mf[i],rf[i])
@@ -176,6 +177,7 @@ def createstar(x, meth):
          rhoft[i+1] = edensity(rhof[i+1],Pf[i+1])
 
       elif meth == "RK4":
+         
          dm = gradm(rhoft[i],rf[i])
          dm0 = gradm0(rhof[i],mf[i],rf[i])
          dP = gradp(rhof[i],rhoft[i],mf[i],rf[i])
@@ -198,8 +200,8 @@ def createstar(x, meth):
 
 rf = np.arange(rc, rmax, dr, dtype = np.float64)
 
-
-rho0test = np.arange(0, 1.628, 0.01); Pctest = Pres(rho0test);
+#1.791287
+rho0test = np.arange(0, 1.79, 0.01); Pctest = Pres(rho0test);
 
 rhottest = edensity(rho0test, Pctest);
 
@@ -262,7 +264,7 @@ plt.plot(rhottest,resultmass0, linestyle="--", label = "mM_0")
 plt.scatter(pa, ma,label = "M_ADM", s = 0.65,c='k'); 
 plt.scatter(pa, mb, label = "M_prop", s = 0.65,c='m'); 
 plt.scatter(pa, mc, label = "M_0", s = 0.65,c='y');
-
+plt.xlim(0.01,1.6)
 plt.legend()
 plt.savefig("TOV M_Stars vs rho_c.pdf",dpi=300)
 
