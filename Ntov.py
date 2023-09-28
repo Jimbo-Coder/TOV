@@ -2,7 +2,7 @@ import numpy as np
 import scipy as sci
 import matplotlib.pyplot as plt
 import csv
-
+import pandas as pd
 
 G = 6.67430e-11; # 6.67E-11 m^3 / kg*s^2 = 1
 c = 2.99792458e8; # 3e8 m = 1 second
@@ -174,7 +174,7 @@ def createstar(x, meth):
       if meth == "Euler":
 
          dm = gradm(rhoft[i],rf[i])
-         dm0 = gradm0(rhoft[i],mf[i],rf[i])
+         dm0 = gradm0(rhof[i],mf[i],rf[i])
          dP = gradp(rhof[i],rhoft[i],mf[i],rf[i])
 
          Pf[i+1] = Pf[i] + dP * dr
@@ -244,10 +244,15 @@ peaki = np.argmax(resultmass)
 print(f"Turning point found at rhoct = {rhottest[peaki]}, M = {resultmass[peaki]}, M_0 = {resultmass0[peaki]}")
 print(f"For rho_c={rhotvis}, Radius is {rf[k]}, M_t  = {masst}, M_0 = {masst0}, M/R is {ratio} ")
 
+
+
+
+#Read 1layer polytrope data
 counter = 1;
 reader = csv.reader(open("tov.dat_orig"))
 pa = []; ma = []; mb = []; mc = []; p0 = []
 for row in reader:
+
    if counter <=7:
       counter +=1
       continue
@@ -269,13 +274,26 @@ pa = np.array(pa, dtype = np.float64);
 p0 = np.array(p0, dtype = np.float64);
 
 
+
+#Read 4 layer polytrope data
+path = "ovphy_plot_SLy_EOS_00.dat"
+
+b = pd.read_csv(path,header=None,delim_whitespace=True)
+rhoant = b[2]; m0ant = b[8]; madant = b[10]
+
+
+
+
 plt.figure()
 plt.title("TOV M_Stars vs rho_c")
 plt.ylabel("M_Star")
 plt.xlabel("rhoc")
 plt.axvline(x=rhotvis, c='b')
-plt.plot(rho0test, resultmass, label = "mM_t")   
+plt.plot(rho0test, resultmass, label = "mM_ADM")   
 plt.plot(rho0test,resultmass0, linestyle="--", label = "mM_0")
+
+plt.scatter(rhoant,m0ant, label = "M_0", s = 0.65)
+plt.scatter(rhoant,madant, label = "M_ADM",s = 0.65)
 
 #Comparison to tov.dat file
 
@@ -283,8 +301,9 @@ plt.plot(rho0test,resultmass0, linestyle="--", label = "mM_0")
 # plt.scatter(pa, mb, label = "M_prop", s = 0.65,c='m'); 
 # plt.scatter(pa, mc, label = "M_0", s = 0.65,c='y');
 # #plt.xlim(0.01,1.6)
+
 plt.legend()
-# plt.savefig("TOV M_Stars vs rho_c.pdf",dpi=300)
+plt.savefig("TOV M_Stars vs rho_c.pdf",dpi=300)
 
 
 # RESIDUAL PLOTTING BLOCK, Uncomment if want comparisons
