@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 import csv
 
 
-G = 6.67e-11; # 6.67E-11 m^3 / kg*s^2 = 1
-c = 3e8; # 3e8 m = 1 second
-Msun = 2e30; #2E30 Kg = 1, call this Msun
+G = 6.67430e-11; # 6.67E-11 m^3 / kg*s^2 = 1
+c = 2.99792458e8; # 3e8 m = 1 second
+Msun = 1.989e30; #2E30 Kg = 1, call this Msun
 lsc = G*Msun / (c**2) # so GMsun/c^2 = 1,482.222 m = 1, call this lsc
 tsc = G*Msun / (c**3) # then GMsun/c^3 = 4.94e-6 s = 1, call this tsc
 #energy is M*L^2/T^2 , mult by tsc^2 / (lsc^2 Msun) and its pure number
@@ -50,7 +50,7 @@ def fourlayer():
    #rhob = np.flip(rhob); gammas = np.flip(gammas);
 
    rhob = rhob * dsc *(100**3)/(1000); 
-   rhozero = rhozero * dsc*(100**3)/(1000); preszero = preszero * psc;
+   rhozero = rhozero * dsc*(100**3)/(1000); preszero = preszero * psc*(100/1000);
 
    gammas = gammas[0:polyN];
 
@@ -75,15 +75,18 @@ def fourlayer():
          break
 
       
+   deltas = []
    for j in range(polyN-1):
       d = kappas[j]*(rhob[j+1]**[gammas[j]]) - kappas[j+1]*(rhob[j+1]**[gammas[j+1]])
+      deltas = np.append(deltas,d)
 
    resP = kappas * rhob[0:polyN]**gammas;
-   print(d/resP[1:polyN])
+   resP = np.append(resP, kappas[polyN-1]*rhob[polyN]**gammas[polyN-1])
+   print(deltas/resP[1:polyN])
 
-   return(kappas, gammas, rhob)
+   return(kappas, gammas, rhob, resP)
 
-kappas, gammas, rhob = fourlayer()
+kappas, gammas, rhob, resP = fourlayer()
 # End Read Polytrope Block
 
 
@@ -97,19 +100,33 @@ def Pres(b):
    # 4 Layer polytrope digitize the rest mass density to the bins rhob
 
    ilayer = np.digitize(b,rhob)
-
    ilayer = np.clip(ilayer, 1,4)
+
    g = kappas[ilayer-1] * (b **(gammas[ilayer-1]))
    
    return(g)
 
 
 
+#Affix to Onelayer
+#kappas = np.array([1,1,1,1]); gammas = np.array([2,2,2,2])
 
 
 def density(z):
-   g = (z/K)**(1/gamma)
+   ilayer = np.digitize(z,resP)
+   ilayer = np.clip(ilayer, 1,4)
+
+   g = (z/kappas[ilayer-1])**(1/gammas[ilayer-1])
+
    return(g)
+
+
+def edensity(rho, P):
+   ilayer = np.digitize(rho,rhob)
+   ilayer = np.clip(ilayer, 1,4)
+
+   h = rho + P / (gammas[ilayer-1]-1)
+   return(h)
 
 def gradm(rhot, r):
    g = 4*np.pi*(r**2)*rhot
@@ -125,18 +142,12 @@ def gradp(rho,rhot, m, r):
    return(f)
 
 
-
 def schwarz(M, R):
    g = 0.5* np.log(1 - ((2*M)/R))
    return(g)
 
-def edensity(rho, P):
-   h = rho + P / (gamma-1)
-   return(h)
 
-
-
-dr = 0.0001; rc = 0.000000001; rmax = 100;
+dr = 0.001; rc = 0.0000001; rmax = 300;
 
 def createstar(x, meth):
 
@@ -163,7 +174,7 @@ def createstar(x, meth):
       if meth == "Euler":
 
          dm = gradm(rhoft[i],rf[i])
-         dm0 = gradm0(rhof[i],mf[i],rf[i])
+         dm0 = gradm0(rhoft[i],mf[i],rf[i])
          dP = gradp(rhof[i],rhoft[i],mf[i],rf[i])
 
          Pf[i+1] = Pf[i] + dP * dr
@@ -179,7 +190,7 @@ def createstar(x, meth):
       elif meth == "RK4":
          
          dm = gradm(rhoft[i],rf[i])
-         dm0 = gradm0(rhof[i],mf[i],rf[i])
+         dm0 = gradm0(rhoft[i],mf[i],rf[i])
          dP = gradp(rhof[i],rhoft[i],mf[i],rf[i])
 
          Pf[i+1] = Pf[i] + dP * dr
@@ -201,7 +212,8 @@ def createstar(x, meth):
 rf = np.arange(rc, rmax, dr, dtype = np.float64)
 
 #1.791287
-rho0test = np.arange(0, 1.79, 0.01); Pctest = Pres(rho0test);
+#rho0test = np.arange(0, 1.78, 0.01); Pctest = Pres(rho0test);
+rho0test = np.arange(0, 0.02, 0.0001); Pctest = Pres(rho0test);
 
 rhottest = edensity(rho0test, Pctest);
 
@@ -210,9 +222,13 @@ for j in rho0test:
    mass, mass0,mfi,Pfi,gf = createstar(j, "Euler"); 
    resultmass = np.append(resultmass, mass)
    resultmass0 = np.append(resultmass0,mass0)
+   print(f'{j} star done')
 
 
 rhotvis = 1.47E15; rhotvis = rhotvis*dsc *(1/1000)*(100**3);# 0.0023934662036213987
+rhotvis = 1.42E15; rhotvis = rhotvis*dsc *(1/1000)*(100**3); # 0.00230044
+
+
 masst,masst0, mft, Pft,k = createstar(rhotvis, "Euler")
 
 
@@ -226,7 +242,7 @@ ratio = masst/rnf;
 peaki = np.argmax(resultmass)
 
 print(f"Turning point found at rhoct = {rhottest[peaki]}, M = {resultmass[peaki]}, M_0 = {resultmass0[peaki]}")
-print(f"For rho_c={rhotvis}, Radius is {rf[k]}, M_t  = {masst}, M_0 = {masst0},compactness is {ratio} ")
+print(f"For rho_c={rhotvis}, Radius is {rf[k]}, M_t  = {masst}, M_0 = {masst0}, M/R is {ratio} ")
 
 counter = 1;
 reader = csv.reader(open("tov.dat_orig"))
@@ -258,15 +274,17 @@ plt.title("TOV M_Stars vs rho_c")
 plt.ylabel("M_Star")
 plt.xlabel("rhoc")
 plt.axvline(x=rhotvis, c='b')
-plt.plot(rhottest, resultmass, label = "mM_t")   
-plt.plot(rhottest,resultmass0, linestyle="--", label = "mM_0")
+plt.plot(rho0test, resultmass, label = "mM_t")   
+plt.plot(rho0test,resultmass0, linestyle="--", label = "mM_0")
 
-plt.scatter(pa, ma,label = "M_ADM", s = 0.65,c='k'); 
-plt.scatter(pa, mb, label = "M_prop", s = 0.65,c='m'); 
-plt.scatter(pa, mc, label = "M_0", s = 0.65,c='y');
-plt.xlim(0.01,1.6)
+#Comparison to tov.dat file
+
+# plt.scatter(pa, ma,label = "M_ADM", s = 0.65,c='k'); 
+# plt.scatter(pa, mb, label = "M_prop", s = 0.65,c='m'); 
+# plt.scatter(pa, mc, label = "M_0", s = 0.65,c='y');
+# #plt.xlim(0.01,1.6)
 plt.legend()
-plt.savefig("TOV M_Stars vs rho_c.pdf",dpi=300)
+# plt.savefig("TOV M_Stars vs rho_c.pdf",dpi=300)
 
 
 # RESIDUAL PLOTTING BLOCK, Uncomment if want comparisons

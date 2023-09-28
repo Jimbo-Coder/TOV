@@ -4,9 +4,9 @@ import csv
 import matplotlib.pyplot as plt
 
 
-G = 6.67e-11; # 6.67E-11 m^3 / kg*s^2 = 1
-c = 3e8; # 3e8 m = 1 second
-Msun = 2e30; #2E30 Kg = 1, call this Msun
+G = 6.67430e-11; # 6.67E-11 m^3 / kg*s^2 = 1
+c = 2.99792458e8; # 3e8 m = 1 second
+Msun = 1.989e30; #2E30 Kg = 1, call this Msun
 lsc = G*Msun / (c**2) # so GMsun/c^2 = 1,482.222 m = 1, call this lsc
 tsc = G*Msun / (c**3) # then GMsun/c^3 = 4.94e-6 s = 1, call this tsc
 #energy is M*L^2/T^2 , mult by tsc^2 / (lsc^2 Msun) and its pure number
@@ -17,7 +17,7 @@ dsc = (lsc**3)/Msun #For normal mass density
 
 reader = csv.reader(open("peos_parameter.dat_SLy"))
 polyN = 4
-rhob =[]; gammas = []; presbs = [];counter = 1;
+rhob =np.array([], dtype = np.float64); gammas = np.array([], dtype = np.float64); presbs = [];counter = 1;
 for row in reader:
     if counter == 8:
         break
@@ -41,7 +41,7 @@ gammas = np.array(gammas, dtype = np.float64);
 #rhob = np.flip(rhob); gammas = np.flip(gammas);
 
 rhob = rhob * dsc *(100**3)/(1000); 
-rhozero = rhozero * dsc*(100**3)/(1000); preszero = preszero * psc;
+rhozero = rhozero * dsc*(100**3)/(1000); preszero = preszero * psc*(100)/(1000);
 
 gammas = gammas[0:polyN];
 
@@ -65,12 +65,17 @@ for i in range(polyN):
     else:
         break
 
-    
+deltas = []
 for j in range(polyN-1):
     d = kappas[j]*(rhob[j+1]**[gammas[j]]) - kappas[j+1]*(rhob[j+1]**[gammas[j+1]])
+    deltas = np.append(deltas,d)
 
 resP = kappas * rhob[0:polyN]**gammas;
-print(d/resP[1:polyN])
+resP = np.append(resP, kappas[polyN-1]*(rhob[polyN]**gammas[polyN-1])) 
+
+prat = resP/rhob
+print(deltas/resP[1:polyN])
+
 # g = kappas * (rhob**gammas)
 # plt.figure()
 # plt.scatter([1,2,3,4,5],g)
