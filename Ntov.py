@@ -118,8 +118,9 @@ def Pres(b, eosm):
    elif eosm == "tab":
       ilayer = np.digitize(b,tabe)
       ilayer = np.clip(ilayer, 1,5499)
-      tP = tabp[ilayer-1]
-      return(tP)
+      tp = tabp[ilayer-1]; tp2 = tabp[ilayer];
+      tpi = np.interp(b, [ilayer,ilayer-1],[tp,tp2])
+      return(tpi)
 
 
 
