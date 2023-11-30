@@ -24,7 +24,7 @@ n = 1/(gamma-1);  # == 1
 # Reading and creating 4 Layer Polytrope block. 
 #  
 def fourlayer():
-   reader = csv.reader(open("peos_parameter.dat_SLy"))
+   reader = csv.reader(open("/data/data_maxwell/TOV/peos_parameter.dat_SLy"))
    polyN = 4
    rhob =[]; gammas = []; presbs = [];counter = 1;
    for row in reader:
@@ -88,23 +88,38 @@ def fourlayer():
 
 kappas, gammas, rhob, resP = fourlayer()
 # End Read Polytrope Block
+def readtabeos():
+    pathtab = "/data/data_maxwell/TOV/teos_parameter.dat_Togashi"
+    tab = pd.read_csv(pathtab,delim_whitespace='True', header = None,skiprows = 1)
+    tabef = tab[0]; tabpf = tab[1]
+    return(tabef, tabpf)
 
+tabe, tabp = readtabeos()
+
+def tabP(b):
+   ilayer = np.digitize(b,tabe)
+   ilayer = np.clip(ilayer, 1,5499)
+   tP = tabp[ilayer-1]
+   return(tP)
 
 
 # Currently rhob = [1.62820830e+00, 1.62820830e-03, 8.16036834e-04, 2.38076618e-04, 1.62820830e-18]
 # 1.62820830 limit
-def Pres(b):
+def Pres(b, eosm):
    #Basic 1 Layer polytrope
    #g = K* (b**gamma)
 
    # 4 Layer polytrope digitize the rest mass density to the bins rhob
-
-   ilayer = np.digitize(b,rhob)
-   ilayer = np.clip(ilayer, 1,4)
-
-   g = kappas[ilayer-1] * (b **(gammas[ilayer-1]))
-   
-   return(g)
+   if eosm == "4layer":
+      ilayer = np.digitize(b,rhob)
+      ilayer = np.clip(ilayer, 1,4)
+      g = kappas[ilayer-1] * (b **(gammas[ilayer-1]))
+      return(g)
+   elif eosm == "tab":
+      ilayer = np.digitize(b,tabe)
+      ilayer = np.clip(ilayer, 1,5499)
+      tP = tabp[ilayer-1]
+      return(tP)
 
 
 
@@ -136,8 +151,8 @@ def gradm0(rho, m, r):
    h = 4*np.pi*(r**2)*rho*((1- (2*m)/r)**(-1/2))
    return(h)
 
-def gradp(rho,rhot, m, r):
-   h = ((-rhot*m)/(r**2)) * (1 + Pres(rho)/rhot) * (1 + (4 * np.pi * Pres(rho)*(r**3))/m)
+def gradp(rho,rhot, m, r, a):
+   h = ((-rhot*m)/(r**2)) * (1 + Pres(rho,a)/rhot) * (1 + (4 * np.pi * Pres(rho,a)*(r**3))/m)
    f = h * ((( 1 - ((2* m) / r)))**(-1))
    return(f)
 
@@ -147,11 +162,11 @@ def schwarz(M, R):
    return(g)
 
 
-dr = 0.001; rc = 0.0000001; rmax = 300;
+dr = 0.01; rc = 0.0000001; rmax = 300;
 
-def createstar(x, meth):
+def createstar(x, meth,metheos):
 
-   rhoc = x; Pc = Pres(rhoc);  
+   rhoc = x; Pc = Pres(rhoc, metheos);  
    rhoct = edensity(rhoc,Pc)
 
    mc = (4/3)*np.pi*(rc**3)*rhoc
@@ -175,33 +190,72 @@ def createstar(x, meth):
 
          dm = gradm(rhoft[i],rf[i])
          dm0 = gradm0(rhof[i],mf[i],rf[i])
-         dP = gradp(rhof[i],rhoft[i],mf[i],rf[i])
+         dP = gradp(rhof[i],rhoft[i],mf[i],rf[i],metheos)
 
          Pf[i+1] = Pf[i] + dP * dr
          mf[i+1] = mf[i] + dm * dr
          mf0[i+1] = mf0[i] + dm0 * dr
 
-         if Pf[i+1] <= 0:
+         if Pf[i+1] <= 0:  #If pressure is negative, break
             break
       
          rhof[i+1] = density(Pf[i+1])
          rhoft[i+1] = edensity(rhof[i+1],Pf[i+1])
 
-      elif meth == "RK4":
-         
-         dm = gradm(rhoft[i],rf[i])
-         dm0 = gradm0(rhoft[i],mf[i],rf[i])
-         dP = gradp(rhof[i],rhoft[i],mf[i],rf[i])
 
-         Pf[i+1] = Pf[i] + dP * dr
-         mf[i+1] = mf[i] + dm * dr
-         mf0[i+1] = mf0[i] + dm0 * dr
+
+      elif meth == "RK4":
+         dm = np.zeros(4);dm0 = np.zeros(4); dP = np.zeros(4);
+
+         dm[0] = gradm(rhoft[i],rf[i])*dr
+         dm0[0] = gradm0(rhof[i],mf[i],rf[i])*dr
+         dP[0] = gradp(rhof[i],rhoft[i],mf[i],rf[i],metheos)*dr
+
+         if Pf[i] + dP[0]/2 <= 0:
+            break
+
+         rho1t = density(Pf[i] + dP[0]/2)
+         rho1tt = edensity(rho1t,Pf[i]+ dP[0]/2)
+
+         dP[1] = gradp(rho1t,rho1tt,mf[i] + dm[0]/2,rf[i] + dr/2,metheos)*dr
+         dm[1] = gradm(rho1tt,rf[i] + dr/2)*dr
+         dm0[1] = gradm0(rho1t,mf[i]+ dm[0]/2,rf[i] + dr/2)*dr
+         
+         if Pf[i] + dP[1]/2 <= 0:
+            break
+
+         rho2t = density(Pf[i] +  dP[1]/2)
+         rho2tt = edensity(rho1t,Pf[i]+ dP[1]/2)
+
+         dP[2] = gradp(rho2t,rho2tt,mf[i] + dm[1]/2,rf[i] + dr/2,metheos)*dr   
+         dm[2] = gradm(rho2tt,rf[i] + dr/2)*dr
+         dm0[2] = gradm0(rho2t,mf[i]+ dm[1]/2,rf[i] + dr/2)*dr
+         
+         if Pf[i] + dP[2] <= 0:
+            break
+
+         rho3t = density(Pf[i] +  dP[2])
+         rho3tt = edensity(rho1t, Pf[i]+ dP[2])
+
+         dP[3] = gradp(rho3t,rho3tt,mf[i] + dm[2],rf[i] + dr,metheos)*dr   
+         dm[3] = gradm(rho3tt,rf[i] + dr)*dr
+         dm0[3] = gradm0(rho3t,mf[i]+ dm[2],rf[i] + dr)*dr
+
+         
+         Pf[i+1] = Pf[i] + (dP[0] + 2*dP[1] + 2*dP[2] + dP[3])/6
+         mf[i+1] = mf[i] + (dm[0] + 2*dm[1] + 2*dm[2] + dm[3])/6
+         mf0[i+1] = mf0[i] + (dm0[0] + 2*dm0[1] + 2*dm0[2] + dm0[3])/6 
 
          if Pf[i+1] <= 0:
             break
 
          rhof[i+1] = density(Pf[i+1])
          rhoft[i+1] = edensity(rhof[i+1],Pf[i+1])
+
+
+
+
+
 
    mres = mf[i]
    mres0 = mf0[i]
@@ -213,23 +267,14 @@ rf = np.arange(rc, rmax, dr, dtype = np.float64)
 
 #1.791287
 #rho0test = np.arange(0, 1.78, 0.01); Pctest = Pres(rho0test);
-rho0test = np.arange(0, 0.02, 0.0001); Pctest = Pres(rho0test);
 
-rhottest = edensity(rho0test, Pctest);
-
-resultmass = []; resultmass0 = [];
-for j in rho0test:
-   mass, mass0,mfi,Pfi,gf = createstar(j, "Euler"); 
-   resultmass = np.append(resultmass, mass)
-   resultmass0 = np.append(resultmass0,mass0)
-   print(f'{j} star done')
 
 
 rhotvis = 1.47E15; rhotvis = rhotvis*dsc *(1/1000)*(100**3);# 0.0023934662036213987
 rhotvis = 1.42E15; rhotvis = rhotvis*dsc *(1/1000)*(100**3); # 0.00230044
 
 
-masst,masst0, mft, Pft,k = createstar(rhotvis, "Euler")
+masst,masst0, mft, Pft,k = createstar(rhotvis, "RK4","4layer")
 
 
 
@@ -237,14 +282,6 @@ masst,masst0, mft, Pft,k = createstar(rhotvis, "Euler")
 rnf = rf[k];
 
 ratio = masst/rnf;
-
-
-peaki = np.argmax(resultmass)
-
-print(f"Turning point found at rhoct = {rhottest[peaki]}, M = {resultmass[peaki]}, M_0 = {resultmass0[peaki]}")
-print(f"For rho_c={rhotvis}, Radius is {rf[k]}, M_t  = {masst}, M_0 = {masst0}, M/R is {ratio} ")
-
-
 
 
 #Read 1layer polytrope data
@@ -279,21 +316,119 @@ p0 = np.array(p0, dtype = np.float64);
 path = "ovphy_plot_SLy_EOS_00.dat"
 
 b = pd.read_csv(path,header=None,delim_whitespace=True)
-rhoant = b[2]; m0ant = b[8]; madant = b[10]
+rhoant = b[2]; m0ant = b[8]; madant = b[10];rsant = b[13];
 
 
+rho0test = np.arange(0, 0.0081, 0.001); 
+rho0test = rhoant
+Pctest = Pres(rho0test, "4layer"); rhottest = edensity(rho0test, Pctest);
+
+#Currently comparing to antionois data
+resultmass = []; resultmass0 = []; resultmassrk=[]; resultmassrk0=[];
+resrad = []; resradrk = [];resultmassrt = []; resultmassrt0 = []; resradrt=[];
+resultmasset = []; resultmasset0 = []; resradet=[];
+for j in rho0test:
+   mass, mass0,mfi,Pfi,gf = createstar(j, "Euler","4layer"); 
+   massrk,massrk0,mfi1,Pfi1,gf1 = createstar(j, "RK4","4layer");
+   massrt,massrt0,mfi2,Pfi2,gft2 = createstar(j, "RK4","tab");
+   masset, masset0, mfi3, Pfi3, gft3 = createstar(j, "Euler","tab");
+
+   resultmass = np.append(resultmass, mass)
+   resultmass0 = np.append(resultmass0,mass0)
+   
+   resultmassrt = np.append(resultmassrt, massrt)
+   resultmassrt0 = np.append(resultmassrt0,massrt0)
+
+   resultmasset = np.append(resultmasset, masset)
+   resultmasset0 = np.append(resultmasset0,masset0)
+
+   resultmassrk = np.append(resultmassrk, massrk) 
+   resultmassrk0 = np.append(resultmassrk0,massrk0)
+
+   resradrt = np.append(resradrt, rf[gft2])
+   resrad = np.append(resrad, rf[gf])
+   resradrk = np.append(resradrk, rf[gf1])
+   resradet = np.append(resradet, rf[gft3])
+
+   print(f'{j} star done')
+
+
+peaki = np.argmax(resultmass)
+peaki1 = np.argmax(resultmassrk)
+
+print(f"Turning point found at rhoct = {rhoant[peaki]}, M = {resultmass[peaki]}, M_0 = {resultmass0[peaki]}")
+print(f"RK4 Turning point found at rhoct = {rhoant[peaki1]}, M = {resultmassrk[peaki1]}, M_0 = {resultmassrk0[peaki1]}")
+print(f"For rho_c={rhotvis}, Radius is {rf[k]}, M_t  = {masst}, M_0 = {masst0}, M/R is {ratio} ")
+
+
+plt.figure()
+plt.title("4Layer M_0 Resid")
+plt.xlabel("rho_c")
+plt.ylabel("rel err.")
+plt.plot(rhoant, (resultmass0 - m0ant)/m0ant, label = "Euler")
+plt.plot(rhoant, (resultmassrk0 - m0ant)/m0ant,label = "RK4")
+plt.plot(rhoant, (resultmassrt0 - m0ant)/m0ant,label = "RK4tab")
+plt.plot(rhoant, (resultmasset0 - m0ant)/m0ant,label = "Eultab")
+plt.legend()
+plt.savefig("4layer restm Resid")
+
+plt.figure()
+plt.title("4Layer M_ADM Resid")
+plt.xlabel("rho_c")
+plt.ylabel("rel err.")
+plt.plot(rhoant, (resultmass - madant)/madant, label = "Euler")
+plt.plot(rhoant, (resultmassrk - madant)/madant, label = "RK4")
+plt.plot(rhoant, (resultmassrt - madant)/madant, label = "RK4tab")
+plt.plot(rhoant, (resultmasset - madant)/madant, label = "Eulertab")
+plt.legend()
+plt.savefig("4layer ADM Resid")
+
+
+plt.figure()
+plt.title("4Layer Radius Resid")
+plt.xlabel("rho_c")
+plt.ylabel("rel err.")
+plt.plot(rhoant, (resrad - rsant)/rsant, label = "Euler")
+plt.plot(rhoant, (resradrk - rsant)/rsant, label = "RK4")
+plt.plot(rhoant, (resradrt - rsant)/rsant, label = "RK4tab")
+plt.plot(rhoant, (resradet - rsant)/rsant, label = "Eulertab")
+plt.legend()
+plt.savefig("4layer radius Resid")
+
+plt.figure()
+plt.title("Euler/RK4 Resid")
+plt.xlabel("rho_c")
+plt.ylabel("rel err.")
+plt.plot(rhoant, (resultmassrk - resultmass)/resultmassrk, label = "M_ADM resid")
+plt.plot(rhoant, (resultmassrk0 - resultmass0)/resultmassrk0, label = "M_0 resid")
+plt.plot(rhoant, (resultmassrt - resultmass)/resultmassrt, label = "M_ADM Rk4Tab resid")
+plt.plot(rhoant, (resultmassrt0 - resultmass0)/resultmassrk0, label = "M_0 Rk4Tab resid")
+plt.plot(rhoant, (resultmasset - resultmassrk)/resultmassrk, label = "M_ADM EulTab resid")
+plt.plot(rhoant, (resultmasset0 - resultmassrk)/resultmassrk, label = "M_ADM EulTab resid")
+plt.legend()
+plt.savefig("Euler_RK4 Resid")
 
 
 plt.figure()
 plt.title("TOV M_Stars vs rho_c")
 plt.ylabel("M_Star")
-plt.xlabel("rhoc")
-plt.axvline(x=rhotvis, c='b')
-plt.plot(rho0test, resultmass, label = "mM_ADM")   
-plt.plot(rho0test,resultmass0, linestyle="--", label = "mM_0")
+plt.xlabel("ρ_c")
+#plt.axvline(x=rhotvis, c='b')
 
-plt.scatter(rhoant,m0ant, label = "M_0", s = 0.65)
-plt.scatter(rhoant,madant, label = "M_ADM",s = 0.65)
+#plt.plot(rho0test, resultmass, label = "EulerM_ADM")   
+#plt.plot(rho0test,resultmass0, linestyle="--", label = "EulerM_0")
+
+plt.plot(rho0test, resultmassrk, label = "Rk4M_ADM",c='b')   
+plt.plot(rho0test,resultmassrk0, linestyle="--", label = "Rk4M_0",c='b')
+
+plt.plot(rho0test, resultmassrt, label = "Rk4tabM_ADM",c='g')
+plt.plot(rho0test, resultmassrt0, linestyle="--", label = "Rk4tabM_0",c='g')
+
+plt.plot(rho0test, resultmasset, label = "EultabM_ADM",c='m')
+plt.plot(rho0test, resultmasset0, linestyle="--", label = "EultabM_0",c='m')
+
+plt.scatter(rhoant,m0ant, label = "M_0", s = 0.85,c='r')
+plt.scatter(rhoant,madant, label = "M_ADM",s = 0.85,c='c')
 
 #Comparison to tov.dat file
 
